@@ -46,10 +46,12 @@ const useProjects = () =>
 function App() {
   const [newProjectName, setNewProjectName] = useState('');
   const [newProjectOwner, setNewProjectOwner] = useState('');
+  const [newProjectAssignee, setNewProjectAssignee] = useState('');
   const [selectedProjectId, setSelectedProjectId] = useState(null);
   const [newTaskTitle, setNewTaskTitle] = useState('');
+  const [newTaskAssignee, setNewTaskAssignee] = useState('Unassigned');
   const [isEditingProject, setIsEditingProject] = useState(false);
-  const [projectDraft, setProjectDraft] = useState({ name: '', owner: '' });
+  const [projectDraft, setProjectDraft] = useState({ name: '', owner: '', assignee: '' });
   const queryClient = useQueryClient();
   const { data: projects = [], isLoading, error } = useProjects();
 
@@ -60,10 +62,11 @@ function App() {
     if (selectedProject) {
       setProjectDraft({
         name: selectedProject.name || '',
-        owner: selectedProject.owner || 'Unassigned',
+        owner: selectedProject.owner || selectedProject.assignee || 'Unassigned',
+        assignee: selectedProject.assignee || selectedProject.owner || 'Unassigned',
       });
     } else {
-      setProjectDraft({ name: '', owner: '' });
+      setProjectDraft({ name: '', owner: '', assignee: '' });
     }
   }, [selectedProject]);
 
@@ -85,20 +88,33 @@ function App() {
     enabled: Boolean(selectedProjectId),
   });
 
+  const normalizePersonName = (value, fallback = 'Unassigned') => {
+    if (typeof value !== 'string') {
+      return fallback;
+    }
+
+    const trimmed = value.trim();
+    return trimmed || fallback;
+  };
+
   const addProjectMutation = useMutation({
-    mutationFn: async ({ name, owner }) => {
+    mutationFn: async ({ name, owner, assignee }) => {
       const trimmedName = name.trim();
 
       if (!trimmedName) {
         throw new Error('Project name is required');
       }
 
+      const resolvedOwner = normalizePersonName(owner, normalizePersonName(assignee, 'Unassigned'));
+      const resolvedAssignee = normalizePersonName(assignee, resolvedOwner);
+
       const response = await fetch(API_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: trimmedName,
-          owner: owner.trim() || 'Unassigned',
+          owner: resolvedOwner,
+          assignee: resolvedAssignee,
           status: 'Not Started',
         }),
       });
@@ -114,11 +130,12 @@ function App() {
       queryClient.invalidateQueries({ queryKey: ['projects'] });
       setNewProjectName('');
       setNewProjectOwner('');
+      setNewProjectAssignee('');
     },
   });
 
   const addTaskMutation = useMutation({
-    mutationFn: async (title) => {
+    mutationFn: async ({ title, assignee }) => {
       const trimmedTitle = title.trim();
 
       if (!trimmedTitle) {
@@ -131,7 +148,7 @@ function App() {
         body: JSON.stringify({
           title: trimmedTitle,
           status: 'To Do',
-          assignee: 'Unassigned',
+          assignee: normalizePersonName(assignee, 'Unassigned'),
         }),
       });
 
@@ -145,6 +162,7 @@ function App() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['projectTasks', selectedProjectId] });
       setNewTaskTitle('');
+      setNewTaskAssignee('Unassigned');
     },
   });
 
@@ -169,11 +187,14 @@ function App() {
   });
 
   const updateProjectMutation = useMutation({
-    mutationFn: async ({ projectId, name, owner }) => {
+    mutationFn: async ({ projectId, name, owner, assignee }) => {
+      const resolvedOwner = normalizePersonName(owner, normalizePersonName(assignee, 'Unassigned'));
+      const resolvedAssignee = normalizePersonName(assignee, resolvedOwner);
+
       const response = await fetch(`${API_URL}/${projectId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, owner }),
+        body: JSON.stringify({ name, owner: resolvedOwner, assignee: resolvedAssignee }),
       });
 
       if (!response.ok) {
@@ -189,6 +210,26 @@ function App() {
       );
       queryClient.invalidateQueries({ queryKey: ['projects'] });
       setIsEditingProject(false);
+    },
+  });
+
+  const updateTaskAssigneeMutation = useMutation({
+    mutationFn: async ({ taskId, assignee }) => {
+      const response = await fetch(`/api/tasks/${taskId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ assignee: normalizePersonName(assignee, 'Unassigned') }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Unable to update task assignee' }));
+        throw new Error(errorData.error || 'Unable to update task assignee');
+      }
+
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['projectTasks', selectedProjectId] });
     },
   });
 
@@ -256,7 +297,7 @@ function App() {
 
   const handleAddProject = (event) => {
     event.preventDefault();
-    addProjectMutation.mutate({ name: newProjectName, owner: newProjectOwner });
+    addProjectMutation.mutate({ name: newProjectName, owner: newProjectOwner, assignee: newProjectAssignee });
   };
 
   const handleAddTask = (event) => {
@@ -266,7 +307,7 @@ function App() {
       return;
     }
 
-    addTaskMutation.mutate(newTaskTitle);
+    addTaskMutation.mutate({ title: newTaskTitle, assignee: newTaskAssignee });
   };
 
   const handleDeleteProject = (projectId) => {
@@ -286,10 +327,14 @@ function App() {
       return;
     }
 
+    const assignee = projectDraft.assignee || projectDraft.owner || 'Unassigned';
+    const owner = projectDraft.owner || assignee;
+
     updateProjectMutation.mutate({
       projectId: selectedProjectId,
       name: projectDraft.name.trim(),
-      owner: projectDraft.owner.trim() || 'Unassigned',
+      owner: owner.trim() || 'Unassigned',
+      assignee: assignee.trim() || 'Unassigned',
     });
   };
 
@@ -310,27 +355,57 @@ function App() {
   const completed = projects.filter((project) => isCompletedStatus(project.status)).length;
 
   return (
-    <Box sx={{ minHeight: '100vh', bgcolor: 'background.default', py: 4 }}>
+    <Box sx={{ minHeight: '100vh', bgcolor: 'background.default', py: { xs: 3, md: 4 } }}>
       <Container maxWidth="lg">
         <Paper
           elevation={0}
           sx={{
-            p: 4,
-            borderRadius: 3,
-            background: 'linear-gradient(135deg, #0f172a 0%, #2563eb 100%)',
+            p: { xs: 3, md: 4 },
+            borderRadius: 0,
+            background: 'linear-gradient(135deg, #0f172a 0%, #1f4e79 100%)',
             color: 'white',
             mb: 4,
+            border: '1px solid rgba(148,163,184,0.2)',
+            overflow: 'hidden',
+            position: 'relative',
           }}
         >
-          <Typography variant="h4" component="h1" gutterBottom>
-            Project Tracker
-          </Typography>
-          <Typography variant="body1" sx={{ opacity: 0.9 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2, flexWrap: 'wrap' }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+              <Box
+                sx={{
+                  width: 52,
+                  height: 52,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  borderRadius: 1,
+                  backgroundColor: 'rgba(255,255,255,0.08)',
+                  border: '1px solid rgba(255,255,255,0.12)',
+                  overflow: 'hidden',
+                }}
+              >
+                <img
+                  src="/project-logo.png"
+                  alt="Project Tracker logo"
+                  style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                />
+              </Box>
+              <Box>
+                <Typography variant="overline" sx={{ color: 'rgba(255,255,255,0.7)' }}>Portfolio</Typography>
+                <Typography variant="h4" component="h1" sx={{ fontWeight: 700 }}>
+                  Project Tracker
+                </Typography>
+              </Box>
+            </Box>
+            <Chip label="Corporate pipeline" sx={{ backgroundColor: 'rgba(255,255,255,0.1)', color: 'white', border: '1px solid rgba(255,255,255,0.12)' }} />
+          </Box>
+          <Typography variant="body1" sx={{ mt: 2, maxWidth: 640, color: 'rgba(255,255,255,0.82)' }}>
             Portfolio dashboard for project delivery and execution.
           </Typography>
         </Paper>
 
-        <Box component="form" onSubmit={handleAddProject} sx={{ display: 'flex', gap: 2, mb: 4, flexWrap: 'wrap' }}>
+        <Box component="form" onSubmit={handleAddProject} sx={{ display: 'flex', gap: 2, mb: 4, flexWrap: 'wrap', p: 2, borderRadius: 0, border: '1px solid #e2e8f0', backgroundColor: '#fff', boxShadow: 'none' }}>
           <TextField
             label="Edit project name"
             value={newProjectName}
@@ -339,13 +414,20 @@ function App() {
             sx={{ minWidth: 260, flex: 1 }}
           />
           <TextField
+            label="Project assignee"
+            value={newProjectAssignee}
+            onChange={(event) => setNewProjectAssignee(event.target.value)}
+            variant="outlined"
+            sx={{ minWidth: 200 }}
+          />
+          <TextField
             label="Owner"
             value={newProjectOwner}
             onChange={(event) => setNewProjectOwner(event.target.value)}
             variant="outlined"
             sx={{ minWidth: 200 }}
           />
-          <Button type="submit" variant="contained" startIcon={<AddIcon />}>
+          <Button type="submit" variant="contained" startIcon={<AddIcon />} sx={{ minWidth: 180 }}>
             Add project
           </Button>
         </Box>
@@ -357,14 +439,18 @@ function App() {
         )}
 
         <Grid container spacing={2} sx={{ mb: 4 }}>
-          {[{ label: 'total', value: totalProjects }, { label: 'in progress', value: inProgress }, { label: 'completed', value: completed }].map((stat) => (
+          {[
+            { label: 'total', value: totalProjects, color: '#e2e8f0' },
+            { label: 'in progress', value: inProgress, color: '#dbeafe' },
+            { label: 'completed', value: completed, color: '#dcfce7' },
+          ].map((stat) => (
             <Grid item xs={12} sm={4} key={stat.label}>
-              <Card>
-                <CardContent>
+              <Card sx={{ background: stat.color, borderColor: 'rgba(15,23,42,0.06)' }}>
+                <CardContent sx={{ p: 2.5 }}>
                   <Typography variant="overline" color="text.secondary">
                     {stat.label}
                   </Typography>
-                  <Typography variant="h5">{`${stat.value} ${stat.label}`}</Typography>
+                  <Typography variant="h5" sx={{ fontWeight: 700 }}>{`${stat.value} ${stat.label}`}</Typography>
                 </CardContent>
               </Card>
             </Grid>
@@ -390,7 +476,7 @@ function App() {
         {!isLoading && !error && projects.length > 0 && (
           <Stack spacing={2}>
             {projects.map((project) => (
-              <Box key={project.id} sx={{ display: 'flex', gap: 1, alignItems: 'stretch' }}>
+              <Box key={project.id} sx={{ display: 'flex', gap: 1.5, alignItems: 'stretch' }}>
                 <Button
                   fullWidth
                   aria-label={`Select ${project.name}`}
@@ -400,24 +486,28 @@ function App() {
                     justifyContent: 'space-between',
                     p: 2,
                     textTransform: 'none',
-                    borderRadius: 2,
+                    borderRadius: 0,
+                    borderColor: selectedProjectId === project.id ? 'primary.main' : '#dfe7f1',
+                    backgroundColor: selectedProjectId === project.id ? '#eef6ff' : '#ffffff',
+                    boxShadow: 'none',
+                    borderLeft: selectedProjectId === project.id ? '4px solid #1f4e79' : '4px solid #dbeafe',
+                    '&:hover': { backgroundColor: selectedProjectId === project.id ? '#eaf3ff' : '#f8fafc' },
                   }}
                 >
                   <Box sx={{ textAlign: 'left' }}>
-                    <Typography variant="h6">{project.name}</Typography>
+                    <Typography variant="h6" sx={{ color: 'text.primary' }}>{project.name}</Typography>
                     <Typography variant="body2" color="text.secondary">
-                      Owner: {project.owner || 'Unassigned'}
+                      Assignee: {project.assignee || project.owner || 'Unassigned'}
                     </Typography>
                   </Box>
                   <Chip
                     label={project.status || 'Not Started'}
-                    color={
-                      isCompletedStatus(project.status)
-                        ? 'success'
-                        : isInProgressStatus(project.status)
-                          ? 'primary'
-                          : 'default'
-                    }
+                    sx={{
+                      backgroundColor: isCompletedStatus(project.status) ? '#dcfce7' : isInProgressStatus(project.status) ? '#dbeafe' : '#f1f5f9',
+                      color: isCompletedStatus(project.status) ? '#14532d' : isInProgressStatus(project.status) ? '#1d4ed8' : '#334155',
+                      borderRadius: 0,
+                      fontWeight: 700,
+                    }}
                   />
                 </Button>
                 <IconButton
@@ -427,7 +517,7 @@ function App() {
                     event.stopPropagation();
                     handleDeleteProject(project.id);
                   }}
-                  sx={{ border: '1px solid', borderColor: 'error.main' }}
+                  sx={{ border: '1px solid', borderColor: 'error.main', backgroundColor: '#fff', borderRadius: 0 }}
                 >
                   <DeleteIcon />
                 </IconButton>
@@ -437,14 +527,26 @@ function App() {
         )}
 
         {selectedProject && (
-          <Card sx={{ mt: 4 }}>
-            <CardContent>
-              <Typography variant="h5" gutterBottom>
-                Project Detail
-              </Typography>
-              <Typography variant="h6">{selectedProject.name}</Typography>
+          <Card sx={{ mt: 4, borderRadius: 0, background: '#ffffff' }}>
+            <CardContent sx={{ p: 3 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2, flexWrap: 'wrap', mb: 2 }}>
+                <Box>
+                  <Typography variant="overline" color="text.secondary">
+                    Project Detail
+                  </Typography>
+                  <Typography variant="h5" sx={{ fontWeight: 700 }}>{selectedProject.name}</Typography>
+                </Box>
+                <Chip
+                  label={selectedProject.status || 'Not Started'}
+                  sx={{
+                    backgroundColor: isCompletedStatus(selectedProject.status) ? '#dcfce7' : isInProgressStatus(selectedProject.status) ? '#dbeafe' : '#f1f5f9',
+                    color: isCompletedStatus(selectedProject.status) ? '#14532d' : isInProgressStatus(selectedProject.status) ? '#1d4ed8' : '#334155',
+                    fontWeight: 700,
+                  }}
+                />
+              </Box>
               <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                Owner: {selectedProject.owner || 'Unassigned'}
+                Assignee: {selectedProject.assignee || selectedProject.owner || 'Unassigned'}
               </Typography>
 
               {!isEditingProject ? (
@@ -457,6 +559,13 @@ function App() {
                     label="Edit project name"
                     value={projectDraft.name}
                     onChange={(event) => setProjectDraft((current) => ({ ...current, name: event.target.value }))}
+                    variant="outlined"
+                    size="small"
+                  />
+                  <TextField
+                    label="Project assignee"
+                    value={projectDraft.assignee}
+                    onChange={(event) => setProjectDraft((current) => ({ ...current, assignee: event.target.value }))}
                     variant="outlined"
                     size="small"
                   />
@@ -487,6 +596,7 @@ function App() {
                       variant={isActive ? 'contained' : 'outlined'}
                       color={status === 'Completed' ? 'success' : status === 'Postponed' ? 'warning' : 'primary'}
                       onClick={() => handleProjectStatusChange(selectedProject.id, status)}
+                      sx={{ borderRadius: 0, px: 2 }}
                     >
                       {label}
                     </Button>
@@ -494,7 +604,7 @@ function App() {
                 })}
               </Stack>
 
-              <Box component="form" onSubmit={handleAddTask} sx={{ display: 'flex', gap: 2, mb: 3, flexWrap: 'wrap' }}>
+              <Box component="form" onSubmit={handleAddTask} sx={{ display: 'flex', gap: 2, mb: 3, flexWrap: 'wrap', p: 2, borderRadius: 0, border: '1px solid #e2e8f0', backgroundColor: '#f8fafc' }}>
                 <TextField
                   label="Task title"
                   value={newTaskTitle}
@@ -502,7 +612,14 @@ function App() {
                   variant="outlined"
                   sx={{ minWidth: 260, flex: 1 }}
                 />
-                <Button type="submit" variant="contained">
+                <TextField
+                  label="Task assignee"
+                  value={newTaskAssignee}
+                  onChange={(event) => setNewTaskAssignee(event.target.value)}
+                  variant="outlined"
+                  sx={{ minWidth: 180 }}
+                />
+                <Button type="submit" variant="contained" sx={{ minWidth: 140 }}>
                   Add task
                 </Button>
               </Box>
@@ -529,6 +646,18 @@ function App() {
                           </Typography>
                         </Box>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          <TextField
+                            size="small"
+                            label="Task assignee"
+                            defaultValue={task.assignee || 'Unassigned'}
+                            onBlur={(event) => {
+                              const nextAssignee = event.target.value.trim() || 'Unassigned';
+                              if (nextAssignee !== (task.assignee || 'Unassigned')) {
+                                updateTaskAssigneeMutation.mutate({ taskId: task.id, assignee: nextAssignee });
+                              }
+                            }}
+                            sx={{ minWidth: 140 }}
+                          />
                           <FormControl size="small" sx={{ minWidth: 140 }}>
                             <InputLabel id={`task-status-label-${task.id}`}>Task status</InputLabel>
                             <Select

@@ -160,6 +160,68 @@ test('adds a task to the selected project', async () => {
   expect(await screen.findByText(/Publish launch plan/i)).toBeInTheDocument();
 });
 
+
+test('adds a task with an assignee to the selected project', async () => {
+  const user = userEvent.setup();
+  const tasks = [];
+
+  global.fetch.mockImplementation((url, options = {}) => {
+    if (url === '/api/projects') {
+      return Promise.resolve({
+        ok: true,
+        json: async () => [{ id: 1, name: 'Website Redesign', status: 'In Progress', owner: 'Alicia' }],
+      });
+    }
+
+    if (url === '/api/projects/1/tasks' && !options.method) {
+      return Promise.resolve({
+        ok: true,
+        json: async () => tasks,
+      });
+    }
+
+    if (url === '/api/projects/1/tasks' && options.method === 'POST') {
+      const payload = JSON.parse(options.body);
+      const newTask = {
+        id: 22,
+        projectId: 1,
+        title: payload.title,
+        status: payload.status || 'To Do',
+        assignee: payload.assignee || 'Unassigned',
+      };
+
+      tasks.push(newTask);
+      return Promise.resolve({
+        ok: true,
+        json: async () => newTask,
+      });
+    }
+
+    return Promise.resolve({ ok: true, json: async () => [] });
+  });
+
+  renderApp();
+
+  const projectButton = await screen.findByRole('button', { name: /select website redesign/i });
+  await user.click(projectButton);
+
+  await user.type(screen.getByLabelText(/task title/i), 'Customer onboarding');
+  await user.type(screen.getByLabelText(/task assignee/i), 'Morgan');
+  await user.click(screen.getByRole('button', { name: /add task/i }));
+
+  await waitFor(() => {
+    expect(global.fetch).toHaveBeenCalledWith(
+      '/api/projects/1/tasks',
+      expect.objectContaining({
+        method: 'POST',
+        body: expect.stringContaining('Morgan'),
+      })
+    );
+  });
+
+  expect(await screen.findByText(/Customer onboarding/i)).toBeInTheDocument();
+});
+
 test('deletes a task from the selected project', async () => {
   const user = userEvent.setup();
   let tasks = [{ id: 11, projectId: 1, title: 'Define rollout plan', status: 'In Progress', assignee: 'Jordan' }];

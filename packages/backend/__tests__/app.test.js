@@ -217,6 +217,20 @@ describe('Project Tracker API Tests', () => {
     expect(response.body).toHaveProperty('owner', 'Alicia');
   });
 
+  test('should accept assignee when creating a project', async () => {
+    const response = await request(app)
+      .post('/api/projects')
+      .send({
+        name: 'Support Migration',
+        status: 'Not Started',
+        assignee: 'Taylor',
+      });
+
+    expect(response.status).toBe(201);
+    expect(response.body).toHaveProperty('assignee', 'Taylor');
+    expect(response.body).toHaveProperty('owner', 'Taylor');
+  });
+
   test('should return a project by id', async () => {
     const createResponse = await request(app)
       .post('/api/projects')

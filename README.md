@@ -1,5 +1,9 @@
 # Project Tracker POC
 
+<div align="center">
+  <img src="packages/frontend/public/project-logo.png" alt="Project Tracker logo" width="180" />
+</div>
+
 A lightweight project management prototype built with a React frontend and an Express backend. It is designed as a simple tracker for managing project status, owners, and delivery tasks.
 
 ## Overview

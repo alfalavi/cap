@@ -111,18 +111,22 @@ app.get('/api/projects/:id', (req, res) => {
 
 // POST /api/projects - Create a new project
 app.post('/api/projects', (req, res) => {
-  const { name, description, status, owner } = req.body;
+  const { name, description, status, owner, assignee } = req.body;
 
   if (typeof name !== 'string' || !name.trim()) {
     return res.status(400).json({ error: 'Project name is required' });
   }
+
+  const normalizedOwner = typeof owner === 'string' && owner.trim() ? owner.trim() : (typeof assignee === 'string' && assignee.trim() ? assignee.trim() : 'Unassigned');
+  const normalizedAssignee = typeof assignee === 'string' && assignee.trim() ? assignee.trim() : normalizedOwner;
 
   const newProject = {
     id: nextProjectId++,
     name: name.trim(),
     description: typeof description === 'string' ? description.trim() : '',
     status: typeof status === 'string' && status.trim() ? status.trim() : 'Not Started',
-    owner: typeof owner === 'string' && owner.trim() ? owner.trim() : 'Unassigned',
+    owner: normalizedOwner,
+    assignee: normalizedAssignee,
     createdAt: new Date().toISOString(),
   };
 
@@ -151,8 +155,15 @@ app.put('/api/projects/:id', (req, res) => {
     project.status = req.body.status.trim();
   }
 
-  if (typeof req.body.owner === 'string' && req.body.owner.trim()) {
-    project.owner = req.body.owner.trim();
+  const nextOwner = typeof req.body.owner === 'string' && req.body.owner.trim() ? req.body.owner.trim() : (typeof req.body.assignee === 'string' && req.body.assignee.trim() ? req.body.assignee.trim() : project.owner);
+  const nextAssignee = typeof req.body.assignee === 'string' && req.body.assignee.trim() ? req.body.assignee.trim() : nextOwner;
+
+  if (nextOwner) {
+    project.owner = nextOwner;
+  }
+
+  if (nextAssignee) {
+    project.assignee = nextAssignee;
   }
 
   res.json(project);
