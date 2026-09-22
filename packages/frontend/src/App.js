@@ -386,9 +386,9 @@ function App() {
                 }}
               >
                 <img
-                  src="/project-logo.png"
+                  src="/PT1.png"
                   alt="Project Tracker logo"
-                  style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block', padding: 4 }}
+                  style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block', margin: 'auto' }}
                 />
               </Box>
               <Box>
