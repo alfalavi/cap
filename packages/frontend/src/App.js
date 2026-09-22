@@ -386,7 +386,7 @@ function App() {
                 }}
               >
                 <img
-                  src="/project-logo.png"
+                  src="/PT.png"
                   alt="Project Tracker logo"
                   style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
                 />
