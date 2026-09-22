@@ -1,236 +1,375 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Alert,
   Box,
   Button,
   Card,
   CardContent,
-  Checkbox,
   Chip,
   CircularProgress,
   Container,
+  FormControl,
+  Grid,
   IconButton,
-  List,
-  ListItem,
+  InputLabel,
+  MenuItem,
   Paper,
+  Select,
   Stack,
   TextField,
   Typography,
 } from '@mui/material';
-import {
-  Add as AddIcon,
-  Delete as DeleteIcon,
-  Edit as EditIcon,
-} from '@mui/icons-material';
+import { Add as AddIcon, DeleteOutline as DeleteIcon } from '@mui/icons-material';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import './App.css';
 
-const API_URL = '/api/todos';
+const API_URL = '/api/projects';
 
-const useTodos = () =>
+const useProjects = () =>
   useQuery({
-    queryKey: ['todos'],
+    queryKey: ['projects'],
     queryFn: async () => {
-      const response = await fetch(API_URL);
+      try {
+        const response = await fetch(API_URL);
 
-      if (!response.ok) {
-        throw new Error('Unable to load todos');
+        if (!response.ok) {
+          throw new Error('Unable to load projects');
+        }
+
+        return response.json();
+      } catch (error) {
+        throw new Error('Unable to load projects');
       }
-
-      return response.json();
     },
   });
 
 function App() {
-  const [newTodoTitle, setNewTodoTitle] = useState('');
-  const [editingId, setEditingId] = useState(null);
-  const [editingTitle, setEditingTitle] = useState('');
+  const [newProjectName, setNewProjectName] = useState('');
+  const [newProjectOwner, setNewProjectOwner] = useState('');
+  const [selectedProjectId, setSelectedProjectId] = useState(null);
+  const [newTaskTitle, setNewTaskTitle] = useState('');
+  const [isEditingProject, setIsEditingProject] = useState(false);
+  const [projectDraft, setProjectDraft] = useState({ name: '', owner: '' });
   const queryClient = useQueryClient();
-  const { data: todos = [], isLoading, error } = useTodos();
+  const { data: projects = [], isLoading, error } = useProjects();
 
-  const addTodoMutation = useMutation({
-    mutationFn: async (title) => {
-      const trimmedTitle = title.trim();
+  const selectedProject =
+    projects.find((project) => project.id === selectedProjectId) || null;
 
-      if (!trimmedTitle) {
-        throw new Error('Title is required');
+  useEffect(() => {
+    if (selectedProject) {
+      setProjectDraft({
+        name: selectedProject.name || '',
+        owner: selectedProject.owner || 'Unassigned',
+      });
+    } else {
+      setProjectDraft({ name: '', owner: '' });
+    }
+  }, [selectedProject]);
+
+  const { data: projectTasks = [], error: taskError } = useQuery({
+    queryKey: ['projectTasks', selectedProjectId],
+    queryFn: async () => {
+      if (!selectedProjectId) {
+        return [];
+      }
+
+      const response = await fetch(`${API_URL}/${selectedProjectId}/tasks`);
+
+      if (!response.ok) {
+        throw new Error('Unable to load tasks');
+      }
+
+      return response.json();
+    },
+    enabled: Boolean(selectedProjectId),
+  });
+
+  const addProjectMutation = useMutation({
+    mutationFn: async ({ name, owner }) => {
+      const trimmedName = name.trim();
+
+      if (!trimmedName) {
+        throw new Error('Project name is required');
       }
 
       const response = await fetch(API_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title: trimmedTitle }),
+        body: JSON.stringify({
+          name: trimmedName,
+          owner: owner.trim() || 'Unassigned',
+          status: 'Not Started',
+        }),
       });
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: 'Unable to add todo' }));
-        throw new Error(errorData.error || 'Unable to add todo');
+        const errorData = await response.json().catch(() => ({ error: 'Unable to add project' }));
+        throw new Error(errorData.error || 'Unable to add project');
       }
 
       return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['todos'] });
-      setNewTodoTitle('');
+      queryClient.invalidateQueries({ queryKey: ['projects'] });
+      setNewProjectName('');
+      setNewProjectOwner('');
     },
   });
 
-  const toggleTodoMutation = useMutation({
-    mutationFn: async (id) => {
-      const response = await fetch(`${API_URL}/${id}/toggle`, {
-        method: 'PATCH',
+  const addTaskMutation = useMutation({
+    mutationFn: async (title) => {
+      const trimmedTitle = title.trim();
+
+      if (!trimmedTitle) {
+        throw new Error('Task title is required');
+      }
+
+      const response = await fetch(`${API_URL}/${selectedProjectId}/tasks`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: trimmedTitle,
+          status: 'To Do',
+          assignee: 'Unassigned',
+        }),
       });
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: 'Unable to update todo' }));
-        throw new Error(errorData.error || 'Unable to update todo');
+        const errorData = await response.json().catch(() => ({ error: 'Unable to add task' }));
+        throw new Error(errorData.error || 'Unable to add task');
       }
 
       return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['todos'] });
+      queryClient.invalidateQueries({ queryKey: ['projectTasks', selectedProjectId] });
+      setNewTaskTitle('');
     },
   });
 
-  const deleteTodoMutation = useMutation({
-    mutationFn: async (id) => {
-      const response = await fetch(`${API_URL}/${id}`, {
+  const deleteProjectMutation = useMutation({
+    mutationFn: async (projectId) => {
+      const response = await fetch(`${API_URL}/${projectId}`, {
         method: 'DELETE',
       });
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: 'Unable to delete todo' }));
-        throw new Error(errorData.error || 'Unable to delete todo');
+        const errorData = await response.json().catch(() => ({ error: 'Unable to delete project' }));
+        throw new Error(errorData.error || 'Unable to delete project');
       }
 
       return response.json();
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['todos'] });
+    onSuccess: (_, deletedProjectId) => {
+      queryClient.invalidateQueries({ queryKey: ['projects'] });
+      queryClient.invalidateQueries({ queryKey: ['projectTasks'] });
+      setSelectedProjectId((currentId) => (currentId === deletedProjectId ? null : currentId));
     },
   });
 
-  const updateTodoMutation = useMutation({
-    mutationFn: async ({ id, title }) => {
-      const trimmedTitle = title.trim();
-
-      if (!trimmedTitle) {
-        throw new Error('Title is required');
-      }
-
-      const response = await fetch(`${API_URL}/${id}`, {
+  const updateProjectMutation = useMutation({
+    mutationFn: async ({ projectId, name, owner }) => {
+      const response = await fetch(`${API_URL}/${projectId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title: trimmedTitle }),
+        body: JSON.stringify({ name, owner }),
       });
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: 'Unable to update todo' }));
-        throw new Error(errorData.error || 'Unable to update todo');
+        const errorData = await response.json().catch(() => ({ error: 'Unable to update project' }));
+        throw new Error(errorData.error || 'Unable to update project');
+      }
+
+      return response.json();
+    },
+    onSuccess: (updatedProject) => {
+      queryClient.setQueryData(['projects'], (currentProjects = []) =>
+        currentProjects.map((project) => (project.id === updatedProject.id ? updatedProject : project))
+      );
+      queryClient.invalidateQueries({ queryKey: ['projects'] });
+      setIsEditingProject(false);
+    },
+  });
+
+  const deleteTaskMutation = useMutation({
+    mutationFn: async (taskId) => {
+      const response = await fetch(`/api/tasks/${taskId}`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Unable to delete task' }));
+        throw new Error(errorData.error || 'Unable to delete task');
       }
 
       return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['todos'] });
-      setEditingId(null);
-      setEditingTitle('');
+      queryClient.invalidateQueries({ queryKey: ['projectTasks', selectedProjectId] });
     },
   });
 
-  const handleAddTodo = (event) => {
+  const updateTaskStatusMutation = useMutation({
+    mutationFn: async ({ taskId, status }) => {
+      const response = await fetch(`/api/tasks/${taskId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Unable to update task status' }));
+        throw new Error(errorData.error || 'Unable to update task status');
+      }
+
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['projectTasks', selectedProjectId] });
+    },
+  });
+
+  const updateProjectStatusMutation = useMutation({
+    mutationFn: async ({ projectId, status }) => {
+      const response = await fetch(`${API_URL}/${projectId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Unable to update project status' }));
+        throw new Error(errorData.error || 'Unable to update project status');
+      }
+
+      return response.json();
+    },
+    onSuccess: (updatedProject, { projectId }) => {
+      queryClient.setQueryData(['projects'], (currentProjects = []) =>
+        currentProjects.map((project) => (project.id === updatedProject.id ? updatedProject : project))
+      );
+      queryClient.invalidateQueries({ queryKey: ['projects'] });
+      setSelectedProjectId(projectId);
+    },
+  });
+
+  const handleAddProject = (event) => {
+    event.preventDefault();
+    addProjectMutation.mutate({ name: newProjectName, owner: newProjectOwner });
+  };
+
+  const handleAddTask = (event) => {
     event.preventDefault();
 
-    if (!newTodoTitle.trim()) {
+    if (!selectedProjectId) {
       return;
     }
 
-    addTodoMutation.mutate(newTodoTitle);
+    addTaskMutation.mutate(newTaskTitle);
   };
 
-  const handleToggleTodo = (id) => {
-    toggleTodoMutation.mutate(id);
+  const handleDeleteProject = (projectId) => {
+    deleteProjectMutation.mutate(projectId);
   };
 
-  const handleDeleteTodo = (id) => {
-    deleteTodoMutation.mutate(id);
+  const handleDeleteTask = (taskId) => {
+    deleteTaskMutation.mutate(taskId);
   };
 
-  const handleEditTodo = (id, title) => {
-    const trimmedTitle = title.trim();
+  const handleTaskStatusChange = (taskId, status) => {
+    updateTaskStatusMutation.mutate({ taskId, status });
+  };
 
-    if (!trimmedTitle) {
+  const handleProjectSave = () => {
+    if (!selectedProjectId) {
       return;
     }
 
-    updateTodoMutation.mutate({ id, title: trimmedTitle });
+    updateProjectMutation.mutate({
+      projectId: selectedProjectId,
+      name: projectDraft.name.trim(),
+      owner: projectDraft.owner.trim() || 'Unassigned',
+    });
   };
 
-  const itemsLeft = todos.filter((todo) => !todo.completed).length;
-  const completedCount = todos.filter((todo) => todo.completed).length;
+  const handleProjectStatusChange = (projectId, status) => {
+    if (!projectId || !status) {
+      return;
+    }
+
+    updateProjectStatusMutation.mutate({ projectId, status });
+  };
+
+  const normalizeProjectStatus = (status) => String(status ?? '').trim();
+  const isInProgressStatus = (status) => ['In Progress', 'Active', 'Started'].includes(normalizeProjectStatus(status));
+  const isCompletedStatus = (status) => ['Done', 'Completed', 'Closed', 'Delivered'].includes(normalizeProjectStatus(status));
+
+  const totalProjects = projects.length;
+  const inProgress = projects.filter((project) => isInProgressStatus(project.status)).length;
+  const completed = projects.filter((project) => isCompletedStatus(project.status)).length;
 
   return (
-    <Box
-      sx={{
-        minHeight: '100vh',
-        bgcolor: 'background.default',
-        py: 4,
-      }}
-    >
-      <Container maxWidth="md">
+    <Box sx={{ minHeight: '100vh', bgcolor: 'background.default', py: 4 }}>
+      <Container maxWidth="lg">
         <Paper
           elevation={0}
           sx={{
             p: 4,
             borderRadius: 3,
-            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            background: 'linear-gradient(135deg, #0f172a 0%, #2563eb 100%)',
             color: 'white',
             mb: 4,
           }}
         >
           <Typography variant="h4" component="h1" gutterBottom>
-            TODO App
+            Project Tracker
           </Typography>
           <Typography variant="body1" sx={{ opacity: 0.9 }}>
-            Session 5: Agentic Development
+            Portfolio dashboard for project delivery and execution.
           </Typography>
         </Paper>
 
-        <Card sx={{ mb: 3 }}>
-          <CardContent>
-            <Box
-              component="form"
-              onSubmit={handleAddTodo}
-              sx={{ display: 'flex', gap: 2 }}
-            >
-              <TextField
-                fullWidth
-                value={newTodoTitle}
-                onChange={(event) => setNewTodoTitle(event.target.value)}
-                placeholder="What needs to be done?"
-                variant="outlined"
-                size="medium"
-              />
-              <Button
-                type="submit"
-                variant="contained"
-                startIcon={<AddIcon />}
-                sx={{ minWidth: 120 }}
-              >
-                Add
-              </Button>
-            </Box>
-            {(addTodoMutation.isError || deleteTodoMutation.isError || updateTodoMutation.isError) && (
-              <Alert severity="error" sx={{ mt: 2 }}>
-                {addTodoMutation.error?.message ||
-                  deleteTodoMutation.error?.message ||
-                  updateTodoMutation.error?.message ||
-                  'Something went wrong'}
-              </Alert>
-            )}
-          </CardContent>
-        </Card>
+        <Box component="form" onSubmit={handleAddProject} sx={{ display: 'flex', gap: 2, mb: 4, flexWrap: 'wrap' }}>
+          <TextField
+            label="Edit project name"
+            value={newProjectName}
+            onChange={(event) => setNewProjectName(event.target.value)}
+            variant="outlined"
+            sx={{ minWidth: 260, flex: 1 }}
+          />
+          <TextField
+            label="Owner"
+            value={newProjectOwner}
+            onChange={(event) => setNewProjectOwner(event.target.value)}
+            variant="outlined"
+            sx={{ minWidth: 200 }}
+          />
+          <Button type="submit" variant="contained" startIcon={<AddIcon />}>
+            Add project
+          </Button>
+        </Box>
+
+        {(addProjectMutation.isError || error) && (
+          <Alert severity="error" sx={{ mb: 3 }}>
+            {addProjectMutation.error?.message || error?.message || 'Something went wrong'}
+          </Alert>
+        )}
+
+        <Grid container spacing={2} sx={{ mb: 4 }}>
+          {[{ label: 'total', value: totalProjects }, { label: 'in progress', value: inProgress }, { label: 'completed', value: completed }].map((stat) => (
+            <Grid item xs={12} sm={4} key={stat.label}>
+              <Card>
+                <CardContent>
+                  <Typography variant="overline" color="text.secondary">
+                    {stat.label}
+                  </Typography>
+                  <Typography variant="h5">{`${stat.value} ${stat.label}`}</Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+          ))}
+        </Grid>
 
         {isLoading && (
           <Box sx={{ display: 'flex', justifyContent: 'center', my: 4 }}>
@@ -238,121 +377,189 @@ function App() {
           </Box>
         )}
 
-        {error && !isLoading && (
-          <Alert severity="error" sx={{ mb: 2 }}>
-            Unable to load todos.
-          </Alert>
-        )}
-
-        {!isLoading && !error && todos.length === 0 && (
-          <Card sx={{ mb: 3 }}>
+        {!isLoading && !error && projects.length === 0 && (
+          <Card>
             <CardContent>
               <Typography variant="body1" color="text.secondary">
-                No todos yet. Add one to get started.
+                No projects yet.
               </Typography>
             </CardContent>
           </Card>
         )}
 
-        {!isLoading && !error && todos.length > 0 && (
-          <Card>
-            <List sx={{ p: 0 }}>
-              {todos.map((todo, index) => (
-                <ListItem
-                  key={todo.id}
+        {!isLoading && !error && projects.length > 0 && (
+          <Stack spacing={2}>
+            {projects.map((project) => (
+              <Box key={project.id} sx={{ display: 'flex', gap: 1, alignItems: 'stretch' }}>
+                <Button
+                  fullWidth
+                  aria-label={`Select ${project.name}`}
+                  variant={selectedProjectId === project.id ? 'contained' : 'outlined'}
+                  onClick={() => setSelectedProjectId(project.id)}
                   sx={{
-                    borderBottom: index < todos.length - 1 ? 1 : 0,
-                    borderColor: 'divider',
-                    '&:hover': {
-                      bgcolor: 'action.hover',
-                    },
+                    justifyContent: 'space-between',
+                    p: 2,
+                    textTransform: 'none',
+                    borderRadius: 2,
                   }}
                 >
-                  {editingId === todo.id ? (
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, width: '100%' }}>
-                      <TextField
-                        fullWidth
-                        value={editingTitle}
-                        onChange={(event) => setEditingTitle(event.target.value)}
-                        size="small"
-                        onKeyDown={(event) => {
-                          if (event.key === 'Enter') {
-                            handleEditTodo(todo.id, editingTitle);
-                          }
-
-                          if (event.key === 'Escape') {
-                            setEditingId(null);
-                            setEditingTitle('');
-                          }
-                        }}
-                      />
-                      <Button
-                        variant="contained"
-                        size="small"
-                        onClick={() => handleEditTodo(todo.id, editingTitle)}
-                      >
-                        Save
-                      </Button>
-                      <Button
-                        variant="text"
-                        size="small"
-                        onClick={() => {
-                          setEditingId(null);
-                          setEditingTitle('');
-                        }}
-                      >
-                        Cancel
-                      </Button>
-                    </Box>
-                  ) : (
-                    <>
-                      <Checkbox
-                        checked={todo.completed}
-                        onChange={() => handleToggleTodo(todo.id)}
-                        sx={{ mr: 2 }}
-                      />
-                      <Typography
-                        sx={{
-                          flex: 1,
-                          textDecoration: todo.completed ? 'line-through' : 'none',
-                          color: todo.completed ? 'text.secondary' : 'text.primary',
-                        }}
-                      >
-                        {todo.title}
-                      </Typography>
-                      <Stack direction="row" spacing={1}>
-                        <IconButton
-                          size="small"
-                          color="primary"
-                          aria-label={`Edit ${todo.title}`}
-                          onClick={() => {
-                            setEditingId(todo.id);
-                            setEditingTitle(todo.title);
-                          }}
-                        >
-                          <EditIcon />
-                        </IconButton>
-                        <IconButton
-                          size="small"
-                          color="error"
-                          aria-label={`Delete ${todo.title}`}
-                          onClick={() => handleDeleteTodo(todo.id)}
-                        >
-                          <DeleteIcon />
-                        </IconButton>
-                      </Stack>
-                    </>
-                  )}
-                </ListItem>
-              ))}
-            </List>
-          </Card>
+                  <Box sx={{ textAlign: 'left' }}>
+                    <Typography variant="h6">{project.name}</Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      Owner: {project.owner || 'Unassigned'}
+                    </Typography>
+                  </Box>
+                  <Chip
+                    label={project.status || 'Not Started'}
+                    color={
+                      isCompletedStatus(project.status)
+                        ? 'success'
+                        : isInProgressStatus(project.status)
+                          ? 'primary'
+                          : 'default'
+                    }
+                  />
+                </Button>
+                <IconButton
+                  aria-label={`Delete ${project.name}`}
+                  color="error"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    handleDeleteProject(project.id);
+                  }}
+                  sx={{ border: '1px solid', borderColor: 'error.main' }}
+                >
+                  <DeleteIcon />
+                </IconButton>
+              </Box>
+            ))}
+          </Stack>
         )}
 
-        <Box sx={{ mt: 3, display: 'flex', justifyContent: 'center', gap: 2 }}>
-          <Chip label={`${itemsLeft} items left`} color="primary" />
-          <Chip label={`${completedCount} completed`} color="success" />
-        </Box>
+        {selectedProject && (
+          <Card sx={{ mt: 4 }}>
+            <CardContent>
+              <Typography variant="h5" gutterBottom>
+                Project Detail
+              </Typography>
+              <Typography variant="h6">{selectedProject.name}</Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                Owner: {selectedProject.owner || 'Unassigned'}
+              </Typography>
+
+              {!isEditingProject ? (
+                <Button variant="outlined" onClick={() => setIsEditingProject(true)} sx={{ mb: 2 }}>
+                  Edit project
+                </Button>
+              ) : (
+                <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', mb: 2 }}>
+                  <TextField
+                    label="Edit project name"
+                    value={projectDraft.name}
+                    onChange={(event) => setProjectDraft((current) => ({ ...current, name: event.target.value }))}
+                    variant="outlined"
+                    size="small"
+                  />
+                  <TextField
+                    label="Edit project owner"
+                    value={projectDraft.owner}
+                    onChange={(event) => setProjectDraft((current) => ({ ...current, owner: event.target.value }))}
+                    variant="outlined"
+                    size="small"
+                  />
+                  <Button variant="contained" onClick={handleProjectSave}>
+                    Save changes
+                  </Button>
+                  <Button variant="text" onClick={() => setIsEditingProject(false)}>
+                    Cancel
+                  </Button>
+                </Box>
+              )}
+
+              <Stack direction="row" spacing={1} sx={{ mb: 2, flexWrap: 'wrap' }}>
+                {['In Progress', 'Postponed', 'Completed'].map((status) => {
+                  const label = status === 'In Progress' ? 'Start project' : status === 'Postponed' ? 'Postpone project' : 'Complete project';
+                  const isActive = (selectedProject.status || 'Not Started') === status;
+
+                  return (
+                    <Button
+                      key={status}
+                      variant={isActive ? 'contained' : 'outlined'}
+                      color={status === 'Completed' ? 'success' : status === 'Postponed' ? 'warning' : 'primary'}
+                      onClick={() => handleProjectStatusChange(selectedProject.id, status)}
+                    >
+                      {label}
+                    </Button>
+                  );
+                })}
+              </Stack>
+
+              <Box component="form" onSubmit={handleAddTask} sx={{ display: 'flex', gap: 2, mb: 3, flexWrap: 'wrap' }}>
+                <TextField
+                  label="Task title"
+                  value={newTaskTitle}
+                  onChange={(event) => setNewTaskTitle(event.target.value)}
+                  variant="outlined"
+                  sx={{ minWidth: 260, flex: 1 }}
+                />
+                <Button type="submit" variant="contained">
+                  Add task
+                </Button>
+              </Box>
+
+              {(addTaskMutation.isError || taskError) && (
+                <Alert severity="error" sx={{ mb: 2 }}>
+                  {addTaskMutation.error?.message || taskError?.message || 'Something went wrong'}
+                </Alert>
+              )}
+
+              {projectTasks.length === 0 ? (
+                <Typography variant="body2" color="text.secondary">
+                  No tasks yet.
+                </Typography>
+              ) : (
+                <Stack spacing={1}>
+                  {projectTasks.map((task) => (
+                    <Card key={task.id} variant="outlined">
+                      <CardContent sx={{ py: 1.5, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 2 }}>
+                        <Box>
+                          <Typography variant="body1">{task.title}</Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            {task.status || 'To Do'} • {task.assignee || 'Unassigned'}
+                          </Typography>
+                        </Box>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          <FormControl size="small" sx={{ minWidth: 140 }}>
+                            <InputLabel id={`task-status-label-${task.id}`}>Task status</InputLabel>
+                            <Select
+                              labelId={`task-status-label-${task.id}`}
+                              value={task.status || 'To Do'}
+                              label="Task status"
+                              onChange={(event) => handleTaskStatusChange(task.id, event.target.value)}
+                            >
+                              {['To Do', 'In Progress', 'Done', 'Blocked'].map((option) => (
+                                <MenuItem key={option} value={option}>
+                                  {option}
+                                </MenuItem>
+                              ))}
+                            </Select>
+                          </FormControl>
+                          <IconButton
+                            aria-label={`Delete ${task.title}`}
+                            color="error"
+                            onClick={() => handleDeleteTask(task.id)}
+                          >
+                            <DeleteIcon />
+                          </IconButton>
+                        </Box>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </Stack>
+              )}
+            </CardContent>
+          </Card>
+        )}
       </Container>
     </Box>
   );
