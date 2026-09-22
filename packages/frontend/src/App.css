@@ -1,17 +1,18 @@
-/* Minimal custom CSS - MUI handles most styling */
-
-/* Custom animations */
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+/* Project Tracker dashboard styling */
+body {
+  background: #f5f7fb;
 }
 
-.App {
-  animation: fadeIn 0.3s ease-in;
+.MuiPaper-root {
+  background-image: none;
+}
+
+.tracker-shell {
+  background:
+    radial-gradient(circle at top left, rgba(47, 111, 237, 0.18), transparent 35%),
+    linear-gradient(180deg, #f6f8fd 0%, #eef3fb 100%);
+}
+
+.glass-card {
+  backdrop-filter: blur(8px);
 }

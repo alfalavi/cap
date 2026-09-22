@@ -1,56 +1,68 @@
 const { test, expect } = require('@playwright/test');
-const { TodoPage } = require('./todo-page');
+const { ProjectPage } = require('./todo-page');
 
-test.describe('Todo app journeys', () => {
+test.describe('Project tracker journeys', () => {
   test.beforeEach(async ({ page }) => {
-    const todoPage = new TodoPage(page);
-    await todoPage.resetState();
-    await todoPage.goto();
+    const projectPage = new ProjectPage(page);
+    await projectPage.resetState();
+    await projectPage.goto();
   });
 
-  test('creates a todo item from the input form', async ({ page }) => {
-    const todoPage = new TodoPage(page);
+  test('creates a project from the input form', async ({ page }) => {
+    const projectPage = new ProjectPage(page);
 
-    await todoPage.addTodo('Write a UI test');
+    await projectPage.addProject('Website Redesign', 'Alicia');
 
-    await todoPage.expectTodoVisible('Write a UI test');
-    await todoPage.expectStats(1, 0);
+    await projectPage.expectProjectVisible('Website Redesign');
+    await projectPage.expectStats(1, 0, 0);
   });
 
-  test('edits and toggles a todo item', async ({ page }) => {
-    const todoPage = new TodoPage(page);
+  test('adds a task to the selected project', async ({ page }) => {
+    const projectPage = new ProjectPage(page);
 
-    await todoPage.addTodo('Draft update');
-    await todoPage.editTodo('Draft update', 'Final draft');
-    await todoPage.toggleTodo('Final draft');
+    await projectPage.addProject('Website Redesign', 'Alicia');
+    await projectPage.selectProject('Website Redesign');
+    await projectPage.addTask('Define launch plan');
 
-    await todoPage.expectTodoVisible('Final draft');
-    await todoPage.expectStats(0, 1);
+    await projectPage.expectTaskVisible('Define launch plan');
   });
 
-  test('deletes a todo item from the list', async ({ page }) => {
-    const todoPage = new TodoPage(page);
+  test('updates a task status from the selected project', async ({ page }) => {
+    const projectPage = new ProjectPage(page);
 
-    await todoPage.addTodo('Delete me');
-    await todoPage.deleteTodo('Delete me');
+    await projectPage.addProject('Website Redesign', 'Alicia');
+    await projectPage.selectProject('Website Redesign');
+    await projectPage.addTask('Define launch plan');
+    await projectPage.updateTaskStatus('Define launch plan', 'Done');
 
-    await expect(page.getByText('Delete me')).toHaveCount(0);
+    await projectPage.expectTaskStatus('Define launch plan', 'Done');
   });
 
-  test('shows the empty state when all todos are removed', async ({ page }) => {
-    const todoPage = new TodoPage(page);
+  test('deletes a task from the selected project', async ({ page }) => {
+    const projectPage = new ProjectPage(page);
 
-    await todoPage.addTodo('Only item');
-    await todoPage.deleteTodo('Only item');
+    await projectPage.addProject('Website Redesign', 'Alicia');
+    await projectPage.selectProject('Website Redesign');
+    await projectPage.addTask('Remove old plan');
+    await projectPage.deleteTask('Remove old plan');
 
-    await todoPage.expectEmptyState();
-    await todoPage.expectStats(0, 0);
+    await expect(page.getByText('Remove old plan')).toHaveCount(0);
   });
 
-  test('shows an error state when the todo API fails', async ({ page }) => {
-    await page.route('**/api/todos**', (route) => route.abort());
+  test('shows the empty state when all projects are removed', async ({ page }) => {
+    const projectPage = new ProjectPage(page);
+
+    await projectPage.addProject('Website Redesign', 'Alicia');
+    await projectPage.deleteProject('Website Redesign');
+
+    await projectPage.expectEmptyState();
+    await projectPage.expectStats(0, 0, 0);
+  });
+
+  test('shows an error state when the project API fails', async ({ page }) => {
+    await page.route('**/api/projects**', (route) => route.abort());
     await page.goto('/');
 
-    await expect(page.getByText(/Unable to load todos/i)).toBeVisible();
+    await expect(page.getByText(/Unable to load projects/i)).toBeVisible();
   });
 });

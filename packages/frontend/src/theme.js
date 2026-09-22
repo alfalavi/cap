@@ -1,27 +1,35 @@
 import { createTheme } from '@mui/material/styles';
 
-// Modern, clean theme for the TODO application
 const theme = createTheme({
   palette: {
     primary: {
-      main: '#1976d2',
-      light: '#42a5f5',
-      dark: '#1565c0',
+      main: '#2f6fed',
+      light: '#dfeaff',
+      dark: '#1f4db3',
     },
     secondary: {
-      main: '#9c27b0',
-      light: '#ba68c8',
-      dark: '#7b1fa2',
+      main: '#101828',
+      light: '#64748b',
+      dark: '#0f172a',
     },
     success: {
-      main: '#2e7d32',
+      main: '#12a36b',
+      light: '#dff9ee',
+    },
+    warning: {
+      main: '#f59e0b',
+      light: '#fff3d9',
     },
     error: {
-      main: '#d32f2f',
+      main: '#dc2626',
     },
     background: {
-      default: '#f5f5f5',
+      default: '#f5f7fb',
       paper: '#ffffff',
+    },
+    text: {
+      primary: '#162033',
+      secondary: '#5f6d87',
     },
   },
   typography: {
@@ -34,19 +42,29 @@ const theme = createTheme({
       'Arial',
       'sans-serif',
     ].join(','),
-    h4: {
-      fontWeight: 600,
+    h1: { fontWeight: 800, letterSpacing: '-0.05em' },
+    h2: { fontWeight: 800, letterSpacing: '-0.04em' },
+    h3: { fontWeight: 800, letterSpacing: '-0.04em' },
+    h4: { fontWeight: 700, letterSpacing: '-0.03em' },
+    h5: { fontWeight: 700 },
+    h6: { fontWeight: 700 },
+    overline: {
+      letterSpacing: '0.14em',
+      fontWeight: 700,
+      textTransform: 'uppercase',
     },
-    h6: {
-      fontWeight: 500,
-    },
+  },
+  shape: {
+    borderRadius: 4,
   },
   components: {
     MuiCard: {
       styleOverrides: {
         root: {
-          borderRadius: 12,
-          boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+          border: '1px solid rgba(148, 163, 184, 0.18)',
+          borderRadius: 4,
+          boxShadow: '0 18px 40px rgba(15, 23, 42, 0.06)',
+          backgroundImage: 'none',
         },
       },
     },
@@ -54,8 +72,17 @@ const theme = createTheme({
       styleOverrides: {
         root: {
           textTransform: 'none',
-          borderRadius: 8,
-          fontWeight: 500,
+          borderRadius: 4,
+          fontWeight: 700,
+          boxShadow: 'none',
+        },
+      },
+    },
+    MuiChip: {
+      styleOverrides: {
+        root: {
+          fontWeight: 700,
+          borderRadius: 999,
         },
       },
     },
@@ -63,7 +90,7 @@ const theme = createTheme({
       styleOverrides: {
         root: {
           '& .MuiOutlinedInput-root': {
-            borderRadius: 8,
+            borderRadius: 4,
           },
         },
       },

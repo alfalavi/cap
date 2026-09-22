@@ -1,16 +1,78 @@
-# AI Coding Assistant Enablement Bootcamp Session 5
+# Project Tracker POC
 
-<img src="https://octodex.github.com/images/Professortocat_v2.png" align="right" height="200px" />
+<div align="center">
+  <img src="packages/frontend/public/project-logo.png" alt="Project Tracker logo" width="180" />
+</div>
 
-Hey @alfalavi!
+A lightweight project management prototype built with a React frontend and an Express backend. It is designed as a simple tracker for managing project status, owners, and delivery tasks.
 
-Mona here. I'm done preparing your exercise. Hope you enjoy! 💚
+## Overview
 
-Remember, it's self-paced so feel free to take a break! ☕️
+This application provides a practical project dashboard for:
 
-[![](https://img.shields.io/badge/Go%20to%20Exercise-%E2%86%92-1f883d?style=for-the-badge&logo=github&labelColor=197935)](https://github.com/alfalavi/cap/issues/1)
+- creating new projects
+- assigning an owner
+- tracking status as Not Started, In Progress, Postponed, or Completed
+- selecting a project to view details and tasks
+- adding, deleting, and updating task status
+- starting, postponing, or completing a project
 
----
+## Features
 
-&copy; 2025 GitHub &bull; [Code of Conduct](https://www.contributor-covenant.org/version/2/1/code_of_conduct/code_of_conduct.md) &bull; [MIT License](https://gh.io/mit)
+- Project list with live status summary cards
+- Project detail panel for editing and lifecycle actions
+- Task management linked to each project
+- In-memory backend data for quick demo setup
+- Frontend and backend validation through Jest and Playwright
 
+## Tech Stack
+
+- React 18
+- Material UI
+- TanStack Query
+- Express.js
+- Node.js
+- Jest
+- Playwright
+
+## Project Structure
+
+- `packages/frontend` — React dashboard and UI tests
+- `packages/backend` — Express API and backend tests
+- `docs/` — project and workflow documentation
+
+## Run locally
+
+1. Install dependencies:
+   ```bash
+   npm install
+   ```
+2. Start the app:
+   ```bash
+   npm start
+   ```
+3. Open the frontend in the browser at http://localhost:3000
+
+The frontend is proxied to the backend API at http://localhost:3001.
+
+## Available scripts
+
+```bash
+npm start
+npm run test
+npm run test:frontend
+npm run test:backend
+npm run test:ui
+```
+
+## Validation
+
+The project includes:
+
+- backend API tests via Jest
+- frontend component tests via React Testing Library
+- UI workflow tests via Playwright
+
+## Notes
+
+This repository is intentionally a compact POC and uses in-memory storage instead of a database so it can be demonstrated quickly and iterated on without setup overhead.
